@@ -109,17 +109,22 @@ jobs:
           OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
           echo "FULL_IMAGE=${{ env.REGISTRY }}/${OWNER}/arb-monitor:${{ github.sha }}" >> $GITHUB_ENV
 
+      # 勿在 script 里直接写 ${{ secrets.DEPLOY_PATH }}，掩码 *** 会与 drone-ssh 包装脚本拼接导致 cd 报错
       - name: Remote pull & up（热更新）
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          ARB_IMAGE: ${{ env.FULL_IMAGE }}
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script_stop: true
+          envs: DEPLOY_PATH,ARB_IMAGE
           script: |
             set -e
-            cd "${{ secrets.DEPLOY_PATH }}"
-            export ARB_IMAGE="${{ env.FULL_IMAGE }}"
+            cd "$DEPLOY_PATH"
+            export ARB_IMAGE="$ARB_IMAGE"
             docker compose -f docker-compose.prod.yml pull app
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker image prune -f
