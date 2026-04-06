@@ -5,6 +5,7 @@
 # - Actions → General：Workflow permissions → Read and write（以便 GITHUB_TOKEN 推 GHCR）
 # - 部署开关（二选一，值均为小写 true）：
 #   Variables：DEPLOY_ENABLED = true   或   Secrets：DEPLOY_ENABLED = true
+#   （job 的 if 里不能可靠读 Secret，故用 deploy-gate 步骤判断）
 # - Secrets：DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH（服务器上放 deploy/docker-compose.prod.yml 与数据卷）
 
 name: CI / CD
@@ -78,12 +79,30 @@ jobs:
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
 
-  deploy:
+  # job 级 if 无法可靠读取 secrets，在此用 step 判断 Variables / Secrets 中的 DEPLOY_ENABLED
+  deploy-gate:
     needs: docker-publish
     if: |
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      (vars.DEPLOY_ENABLED == 'true' || secrets.DEPLOY_ENABLED == 'true')
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.check.outputs.deploy }}
+    steps:
+      - id: check
+        env:
+          DEPLOY_VAR: ${{ vars.DEPLOY_ENABLED }}
+          DEPLOY_SECRET: ${{ secrets.DEPLOY_ENABLED }}
+        run: |
+          if [ "${DEPLOY_VAR}" = "true" ] || [ "${DEPLOY_SECRET}" = "true" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: [docker-publish, deploy-gate]
+    if: needs.deploy-gate.outputs.deploy == 'true'
     runs-on: ubuntu-latest
 
     steps:
