@@ -3,9 +3,8 @@
 #
 # 使用前在仓库设置：
 # - Actions → General：Workflow permissions → Read and write（以便 GITHUB_TOKEN 推 GHCR）
-# - 部署开关（二选一，值均为小写 true）：
-#   Variables：DEPLOY_ENABLED = true   或   Secrets：DEPLOY_ENABLED = true
-#   （job 的 if 里不能可靠读 Secret，故用 deploy-gate 步骤判断）
+# - 部署开关：必须在 Repository Variables 里设置 DEPLOY_ENABLED = true（小写）
+#   （勿放 Secrets：若步骤里引用 secret，GitHub 会禁止该步骤的 job output，导致 deploy 永远不跑）
 # - Secrets：DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH（服务器上放 deploy/docker-compose.prod.yml 与数据卷）
 
 name: CI / CD
@@ -79,7 +78,7 @@ jobs:
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
 
-  # job 级 if 无法可靠读取 secrets，在此用 step 判断 Variables / Secrets 中的 DEPLOY_ENABLED
+  # 仅用 vars，且输出 1/0（避免与 secret 同值时被 GitHub 判定为泄漏而丢弃 output）
   deploy-gate:
     needs: docker-publish
     if: |
@@ -90,19 +89,16 @@ jobs:
       deploy: ${{ steps.check.outputs.deploy }}
     steps:
       - id: check
-        env:
-          DEPLOY_VAR: ${{ vars.DEPLOY_ENABLED }}
-          DEPLOY_SECRET: ${{ secrets.DEPLOY_ENABLED }}
         run: |
-          if [ "${DEPLOY_VAR}" = "true" ] || [ "${DEPLOY_SECRET}" = "true" ]; then
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          if [ "${{ vars.DEPLOY_ENABLED }}" = "true" ]; then
+            echo "deploy=1" >> "$GITHUB_OUTPUT"
           else
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "deploy=0" >> "$GITHUB_OUTPUT"
           fi
 
   deploy:
     needs: [docker-publish, deploy-gate]
-    if: needs.deploy-gate.outputs.deploy == 'true'
+    if: needs.deploy-gate.outputs.deploy == '1'
     runs-on: ubuntu-latest
 
     steps:
