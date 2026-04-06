@@ -1,0 +1,14 @@
+{
+  "name": "crypto-arb-monitor",
+  "private": true,
+  "version": "1.0.0",
+  "description": "加密货币套利监控系统 - 按开发方案实现的 MVP",
+  "scripts": {
+    "dev": "npm run dev -w web",
+    "build": "npm run build -w web"
+  },
+  "workspaces": ["web"],
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

@@ -1,0 +1,58 @@
+# 生产 / CD：仅使用镜像仓库中的镜像（不在服务器上 build）
+# 服务器上用法：
+#   export ARB_IMAGE=ghcr.io/<你的小写用户名>/arb-monitor:<git-sha 或 latest>
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# 或创建 .env：
+#   ARB_IMAGE=ghcr.io/owner/arb-monitor:latest
+
+name: arb
+
+services:
+  app:
+    image: ${ARB_IMAGE}
+    container_name: arb-app
+    ports:
+      - "8787:8787"
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - arb_h2:/app/data
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      ARB_MQ_ENABLED: ${ARB_MQ_ENABLED:-true}
+      ARB_MQ_HOST: 127.0.0.1
+      ARB_MQ_PORT: "5672"
+      ARB_MQ_USERNAME: guest
+      ARB_MQ_PASSWORD: guest
+    networks:
+      - arb
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - arb
+
+  mysql:
+    image: mysql:8
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: arb
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - arb
+
+networks:
+  arb:
+    driver: bridge
+
+volumes:
+  mysql_data: {}
+  rabbitmq_data: {}
+  arb_h2: {}

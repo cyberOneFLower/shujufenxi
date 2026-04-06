@@ -1,0 +1,50 @@
+server:
+  port: 8787
+
+spring:
+  application:
+    name: arb-monitor
+  datasource:
+    url: jdbc:h2:file:./data/arb;DB_CLOSE_DELAY=-1;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+arb:
+  spread-push-ms: 3000
+  volatility-push-ms: 3000
+  exchanges:
+    - bitget
+    - gate
+    - mexc
+    - okx
+  # RabbitMQ：true 时行情先入队再由消费者写入内存（削峰）；false 时采集直连内存（本地/无 Rabbit 时必须为 false）
+  mq:
+    enabled: false
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+    queue: arb.depth.ticks
+    prefetch: 200
+    consumers: 1
+  live:
+    # true：OKX/Gate/Bitget WebSocket + MEXC REST；false：使用内存模拟行情
+    enabled: false
+    symbols:
+      - BTC_USDT
+      - ETH_USDT
+    # MEXC REST 轮询间隔（越小更新越快，负载越高；建议 250–500）
+    mexc-poll-ms: 280
+    reconnect-base-ms: 2000

@@ -1,0 +1,63 @@
+# 单镜像：Spring Boot + 内置 RabbitMQ（同一容器，supervisord 管理）
+#
+#   docker compose up -d --build
+# 访问：http://localhost:8787
+# RabbitMQ 管理台：http://localhost:15672  guest/guest
+# AMQP（本机调试）：localhost:5672
+#
+# 数据卷：arb_h2（H2）、rabbitmq_data（队列与 Erlang 数据）
+
+name: arb
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: arb-monitor:1.0.0
+    container_name: arb-app
+    ports:
+      - "8787:8787"
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - arb_h2:/app/data
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      # 与镜像内 RabbitMQ 通信；若改为 false 则走直连内存（Broker 仍在跑但应用不用）
+      ARB_MQ_ENABLED: ${ARB_MQ_ENABLED:-true}
+      ARB_MQ_HOST: 127.0.0.1
+      ARB_MQ_PORT: "5672"
+      ARB_MQ_USERNAME: guest
+      ARB_MQ_PASSWORD: guest
+    networks:
+      - arb
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - arb
+
+  mysql:
+    image: mysql:8
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: arb
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - arb
+
+networks:
+  arb:
+    driver: bridge
+
+volumes:
+  mysql_data: {}
+  rabbitmq_data: {}
+  arb_h2: {}

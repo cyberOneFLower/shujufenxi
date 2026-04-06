@@ -1,0 +1,109 @@
+# CI：测试 + 构建镜像并推送到 GHCR
+# CD：推送到 main 后可选 SSH 到服务器执行 pull + up（热更新：替换容器为新镜像，停机约数秒）
+#
+# 使用前在仓库设置：
+# - Actions → General：Workflow permissions → Read and write（以便 GITHUB_TOKEN 推 GHCR）
+# - 可选 Variables：DEPLOY_ENABLED = true
+# - 可选 Secrets：DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH（服务器上放 deploy/docker-compose.prod.yml 与数据卷）
+
+name: CI / CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Backend tests
+        run: cd backend && mvn -B -q test
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Frontend install & build
+        run: |
+          cd web
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          npm run build
+
+  docker-publish:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image name (GHCR 需小写)
+        run: |
+          OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE=${{ env.REGISTRY }}/${OWNER}/arb-monitor" >> $GITHUB_ENV
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+
+  deploy:
+    needs: docker-publish
+    if: |
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+      github.event_name == 'push' &&
+      vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image ref
+        run: |
+          OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          echo "FULL_IMAGE=${{ env.REGISTRY }}/${OWNER}/arb-monitor:${{ github.sha }}" >> $GITHUB_ENV
+
+      - name: Remote pull & up（热更新）
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+            export ARB_IMAGE="${{ env.FULL_IMAGE }}"
+            docker compose -f docker-compose.prod.yml pull app
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker image prune -f
