@@ -3,8 +3,9 @@
 #
 # 使用前在仓库设置：
 # - Actions → General：Workflow permissions → Read and write（以便 GITHUB_TOKEN 推 GHCR）
-# - 可选 Variables：DEPLOY_ENABLED = true
-# - 可选 Secrets：DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH（服务器上放 deploy/docker-compose.prod.yml 与数据卷）
+# - 部署开关（二选一，值均为小写 true）：
+#   Variables：DEPLOY_ENABLED = true   或   Secrets：DEPLOY_ENABLED = true
+# - Secrets：DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH（服务器上放 deploy/docker-compose.prod.yml 与数据卷）
 
 name: CI / CD
 
@@ -81,8 +82,8 @@ jobs:
     needs: docker-publish
     if: |
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
-      github.event_name == 'push' &&
-      vars.DEPLOY_ENABLED == 'true'
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (vars.DEPLOY_ENABLED == 'true' || secrets.DEPLOY_ENABLED == 'true')
     runs-on: ubuntu-latest
 
     steps:
