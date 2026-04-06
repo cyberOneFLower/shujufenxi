@@ -123,6 +123,9 @@ jobs:
           envs: DEPLOY_PATH,ARB_IMAGE
           script: |
             set -e
+            # Secret 里若多打了回车/换行，cd 会变成「路径名+\n」而失败
+            DEPLOY_PATH="$(printf '%s' "$DEPLOY_PATH" | tr -d '\r\n')"
+            ARB_IMAGE="$(printf '%s' "$ARB_IMAGE" | tr -d '\r\n')"
             cd "$DEPLOY_PATH"
             export ARB_IMAGE="$ARB_IMAGE"
             docker compose -f docker-compose.prod.yml pull app
