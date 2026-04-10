@@ -5,17 +5,44 @@ import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 真实四所行情：OKX / Gate / Bitget 使用官方 WSS JSON；MEXC Spot v3 主推 Protobuf，此处用 REST 深度作补充（见文档说明）。
+ * 真实四所行情：OKX / Gate / Bitget 使用官方 WSS；MEXC 默认用官方 Protobuf 深度流（与 REST 二选一）。
  */
 @ConfigurationProperties(prefix = "arb.live")
 public class LiveFeedProperties {
 
-  /** 为 true 时启用真实行情，关闭 {@link com.arb.monitor.market.MockCollectorService} */
-  private boolean enabled = false;
+  /** 为 true（默认）时启用真实行情；显式 false 时使用 {@link com.arb.monitor.market.MockCollectorService} */
+  private boolean enabled = true;
+
+  /**
+   * api：从四所公共接口计算 USDT 现货交集（见 {@link com.arb.monitor.market.feed.SymbolUniverseService}）；config：仅使用下方
+   * {@link #symbols}
+   */
+  private String symbolSource = "api";
+
+  /** 仅 symbolSource=api 时生效；0 表示不截断（慎用负载） */
+  private int maxSymbols = 500;
+
+  /** OKX/Bitget 单条 subscribe 内分批条数，避免报文过大 */
+  private int subscribeChunkSize = 60;
+
+  /** MEXC 单连接最多订阅数（官方约 30） */
+  private int mexcShardSize = 30;
 
   private List<String> symbols = new ArrayList<>(List.of("BTC_USDT", "ETH_USDT"));
 
-  /** MEXC REST /api/v3/depth 轮询间隔（毫秒） */
+  /**
+   * true：MEXC 使用 {@code wss://wbs-api.mexc.com/ws} + limit depth Protobuf（推荐，延迟最低）。
+   * false：使用 REST /api/v3/depth 轮询（{@link #mexcPollMs}）。
+   */
+  private boolean mexcWebsocketEnabled = true;
+
+  /** MEXC Spot WebSocket 基址 */
+  private String mexcWsUrl = "wss://wbs-api.mexc.com/ws";
+
+  /** Gate {@code spot.order_book} 推送间隔：20ms 比 100ms 更接近盘口（负载更高） */
+  private String gateOrderBookInterval = "20ms";
+
+  /** MEXC REST /api/v3/depth 轮询间隔（毫秒），仅 mexcWebsocketEnabled=false 时生效 */
   private long mexcPollMs = 400;
 
   /** WebSocket 断线后重连基础延迟（毫秒） */
@@ -40,6 +67,62 @@ public class LiveFeedProperties {
 
   public void setSymbols(List<String> symbols) {
     this.symbols = symbols;
+  }
+
+  public String getSymbolSource() {
+    return symbolSource;
+  }
+
+  public void setSymbolSource(String symbolSource) {
+    this.symbolSource = symbolSource;
+  }
+
+  public int getMaxSymbols() {
+    return maxSymbols;
+  }
+
+  public void setMaxSymbols(int maxSymbols) {
+    this.maxSymbols = maxSymbols;
+  }
+
+  public int getSubscribeChunkSize() {
+    return subscribeChunkSize;
+  }
+
+  public void setSubscribeChunkSize(int subscribeChunkSize) {
+    this.subscribeChunkSize = subscribeChunkSize;
+  }
+
+  public int getMexcShardSize() {
+    return mexcShardSize;
+  }
+
+  public void setMexcShardSize(int mexcShardSize) {
+    this.mexcShardSize = mexcShardSize;
+  }
+
+  public boolean isMexcWebsocketEnabled() {
+    return mexcWebsocketEnabled;
+  }
+
+  public void setMexcWebsocketEnabled(boolean mexcWebsocketEnabled) {
+    this.mexcWebsocketEnabled = mexcWebsocketEnabled;
+  }
+
+  public String getMexcWsUrl() {
+    return mexcWsUrl;
+  }
+
+  public void setMexcWsUrl(String mexcWsUrl) {
+    this.mexcWsUrl = mexcWsUrl;
+  }
+
+  public String getGateOrderBookInterval() {
+    return gateOrderBookInterval;
+  }
+
+  public void setGateOrderBookInterval(String gateOrderBookInterval) {
+    this.gateOrderBookInterval = gateOrderBookInterval;
   }
 
   public long getMexcPollMs() {

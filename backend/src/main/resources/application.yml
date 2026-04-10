@@ -40,11 +40,22 @@ arb:
     prefetch: 200
     consumers: 1
   live:
-    # true：OKX/Gate/Bitget WebSocket + MEXC REST；false：使用内存模拟行情
-    enabled: false
+    # true（推荐）：四所真实行情 WSS/REST；false：仅用内存模拟（离线/调试）
+    enabled: true
+    # api：四所 USDT 现货交易对交集（启动时拉取）；config：仅使用下方 symbols
+    symbol-source: api
+    # 仅 symbol-source=api 时生效；0=不限制（负载极高，慎用）
+    max-symbols: 500
+    subscribe-chunk-size: 60
+    mexc-shard-size: 30
     symbols:
       - BTC_USDT
       - ETH_USDT
-    # MEXC REST 轮询间隔（越小更新越快，负载越高；建议 250–500）
+    # MEXC：true=官方 WSS + Protobuf 限价深度（推荐）；false=仅 REST 轮询（见 mexc-poll-ms）
+    mexc-websocket-enabled: true
+    mexc-ws-url: wss://wbs-api.mexc.com/ws
+    # Gate 盘口推送间隔：20ms 比 100ms 更贴近实时（负载略高）
+    gate-order-book-interval: "20ms"
+    # MEXC REST 轮询间隔（仅 mexc-websocket-enabled=false 时生效；建议 250–500）
     mexc-poll-ms: 280
     reconnect-base-ms: 2000

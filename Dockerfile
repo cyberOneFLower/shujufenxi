@@ -64,6 +64,7 @@ VOLUME ["/app/data", "/var/lib/rabbitmq"]
 
 ENV RABBITMQ_DEFAULT_USER=guest \
     RABBITMQ_DEFAULT_PASS=guest \
+    ARB_LIVE_ENABLED=true \
     ARB_MQ_ENABLED=true \
     ARB_MQ_HOST=127.0.0.1 \
     ARB_MQ_PORT=5672 \

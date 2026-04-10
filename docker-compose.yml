@@ -24,6 +24,8 @@ services:
       - arb_h2:/app/data
       - rabbitmq_data:/var/lib/rabbitmq
     environment:
+      # 真实四所行情；本地/离线调试可设 false 走内存模拟
+      ARB_LIVE_ENABLED: ${ARB_LIVE_ENABLED:-true}
       # 与镜像内 RabbitMQ 通信；若改为 false 则走直连内存（Broker 仍在跑但应用不用）
       ARB_MQ_ENABLED: ${ARB_MQ_ENABLED:-true}
       ARB_MQ_HOST: 127.0.0.1

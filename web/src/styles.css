@@ -581,6 +581,23 @@ button.ghost {
   margin-right: 0.25rem;
 }
 
+.analysis-search-input {
+  min-width: 12rem;
+  max-width: 20rem;
+  padding: 0.35rem 0.6rem;
+  font-size: 13px;
+  border: 1px solid var(--a-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--a-text);
+}
+
+.analysis-search-input:focus {
+  outline: none;
+  border-color: var(--a-pink);
+  box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.15);
+}
+
 .analysis-platforms {
   display: flex;
   flex-wrap: wrap;
@@ -786,14 +803,29 @@ button.ghost {
 .analysis-pair-cell {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+.analysis-pair-row {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  max-width: 100%;
+  line-height: 1.2;
+}
+
+.analysis-pair-symbol {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .ex-badge-wrap {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  margin-left: 0.35rem;
-  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .ex-badge {

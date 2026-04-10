@@ -42,8 +42,8 @@ const COL_LABELS: Record<ColKey, string> = {
   spread: "价差%",
   pxBuy: "买入价格",
   pxSell: "卖出价格",
-  volBuy: "买入盘位 USDT",
-  volSell: "卖出盘位 USDT",
+  volBuy: "买一档单价 USDT",
+  volSell: "卖一档单价 USDT",
   ops: "操作",
 };
 
@@ -129,6 +129,8 @@ export default function SpreadPage() {
   const [showColMenu, setShowColMenu] = useState(false);
   const [favFirst, setFavFirst] = useState(true);
   const [category, setCategory] = useState<"all" | "majors">("all");
+  /** 按交易对关键字过滤（不区分大小写） */
+  const [symbolQuery, setSymbolQuery] = useState("");
 
   const persistCols = useCallback((next: Record<ColKey, boolean>) => {
     setCols(next);
@@ -177,10 +179,15 @@ export default function SpreadPage() {
   };
 
   const filtered = useMemo(() => {
+    const q = symbolQuery.trim().toLowerCase();
     let list = rows.filter((r) => {
       const b = r.exchangeBuy?.toLowerCase() ?? "";
       const s = r.exchangeSell?.toLowerCase() ?? "";
       if (!plat[b] || !plat[s]) return false;
+      if (q) {
+        const sym = r.symbol?.toLowerCase() ?? "";
+        if (!sym.includes(q)) return false;
+      }
       if (category === "majors") {
         const sym = r.symbol?.toUpperCase() ?? "";
         if (!sym.includes("BTC") && !sym.includes("ETH")) return false;
@@ -197,14 +204,15 @@ export default function SpreadPage() {
       });
     }
     return list;
-  }, [rows, plat, category, favFirst, fav]);
+  }, [rows, plat, category, favFirst, fav, symbolQuery]);
 
-  const maxBuy = useMemo(
-    () => Math.max(1, ...filtered.map((r) => Number(r.buyLegTotalUsd) || 0)),
+  /** 条形图按「一档单价」相对缩放（原为一档名义 USDT 深度） */
+  const maxAskBuyPx = useMemo(
+    () => Math.max(1, ...filtered.map((r) => Number(r.ask1Buy) || 0)),
     [filtered],
   );
-  const maxSell = useMemo(
-    () => Math.max(1, ...filtered.map((r) => Number(r.sellLegTotalUsd) || 0)),
+  const maxBidSellPx = useMemo(
+    () => Math.max(1, ...filtered.map((r) => Number(r.bid1Sell) || 0)),
     [filtered],
   );
 
@@ -256,6 +264,20 @@ export default function SpreadPage() {
             />
             收藏优先
           </label>
+        </div>
+        <div className="analysis-toolbar-group">
+          <label className="analysis-toolbar-label" htmlFor="symbol-search">
+            搜索币种
+          </label>
+          <input
+            id="symbol-search"
+            type="search"
+            className="analysis-search-input"
+            placeholder="如 ETH、PEPE、BTC_USDT"
+            value={symbolQuery}
+            onChange={(e) => setSymbolQuery(e.target.value)}
+            autoComplete="off"
+          />
         </div>
         <div className="analysis-toolbar-group">
           <span className="analysis-toolbar-label">过滤平台</span>
@@ -321,17 +343,17 @@ export default function SpreadPage() {
               {cols.spread && <th style={{ width: 72 }}>价差%</th>}
               {cols.pxBuy && <th style={{ width: 88 }}>买入价格</th>}
               {cols.pxSell && <th style={{ width: 88 }}>卖出价格</th>}
-              {cols.volBuy && <th>买入盘位 USDT</th>}
-              {cols.volSell && <th>卖出盘位 USDT</th>}
+              {cols.volBuy && <th>{COL_LABELS.volBuy}</th>}
+              {cols.volSell && <th>{COL_LABELS.volSell}</th>}
               {cols.ops && <th style={{ width: 100 }}>操作</th>}
             </tr>
           </thead>
           <tbody>
             {filtered.map((r) => {
-              const buyUsd = Number(r.buyLegTotalUsd) || 0;
-              const sellUsd = Number(r.sellLegTotalUsd) || 0;
-              const wBuy = Math.min(100, (buyUsd / maxBuy) * 100);
-              const wSell = Math.min(100, (sellUsd / maxSell) * 100);
+              const askBuy = Number(r.ask1Buy) || 0;
+              const bidSell = Number(r.bid1Sell) || 0;
+              const wBuy = Math.min(100, (askBuy / maxAskBuyPx) * 100);
+              const wSell = Math.min(100, (bidSell / maxBidSellPx) * 100);
               const warnSell = r.depthColor === "yellow";
               return (
                 <tr key={r.pair_key}>
@@ -355,10 +377,12 @@ export default function SpreadPage() {
                   )}
                   {cols.pair && (
                     <td className="analysis-pair-cell">
-                      {r.symbol}
-                      <span className="ex-badge-wrap">
-                        <ExBadge ex={r.exchangeBuy} />
-                        <ExBadge ex={r.exchangeSell} />
+                      <span className="analysis-pair-row">
+                        <span className="analysis-pair-symbol">{r.symbol}</span>
+                        <span className="ex-badge-wrap">
+                          <ExBadge ex={r.exchangeBuy} />
+                          <ExBadge ex={r.exchangeSell} />
+                        </span>
                       </span>
                     </td>
                   )}
@@ -378,7 +402,7 @@ export default function SpreadPage() {
                           className="analysis-bar-fill analysis-bar-fill--buy"
                           style={{ width: `${wBuy}%` }}
                         >
-                          ${buyUsd.toFixed(2)}
+                          {fmtPrice(r.ask1Buy)}
                         </div>
                       </div>
                     </td>
@@ -390,7 +414,7 @@ export default function SpreadPage() {
                           className={`analysis-bar-fill analysis-bar-fill--sell ${warnSell ? "is-warn" : ""}`}
                           style={{ width: `${wSell}%` }}
                         >
-                          ${sellUsd.toFixed(2)}
+                          {fmtPrice(r.bid1Sell)}
                         </div>
                       </div>
                     </td>
