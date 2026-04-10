@@ -44,8 +44,8 @@ arb:
     enabled: true
     # api：四所 USDT 现货交易对交集（启动时拉取）；config：仅使用下方 symbols
     symbol-source: api
-    # 仅 symbol-source=api 时生效；0=不限制（负载极高，慎用）
-    max-symbols: 500
+    # 仅 symbol-source=api 时生效；0=不截断，使用四所交集全部交易对（负载与连接数随标的增加）
+    max-symbols: 0
     subscribe-chunk-size: 60
     mexc-shard-size: 30
     symbols:

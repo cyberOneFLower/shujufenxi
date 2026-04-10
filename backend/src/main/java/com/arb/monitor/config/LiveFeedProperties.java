@@ -19,8 +19,8 @@ public class LiveFeedProperties {
    */
   private String symbolSource = "api";
 
-  /** 仅 symbolSource=api 时生效；0 表示不截断（慎用负载） */
-  private int maxSymbols = 500;
+  /** 仅 symbolSource=api 时生效；0 表示不截断（使用交集全部交易对） */
+  private int maxSymbols = 0;
 
   /** OKX/Bitget 单条 subscribe 内分批条数，避免报文过大 */
   private int subscribeChunkSize = 60;
