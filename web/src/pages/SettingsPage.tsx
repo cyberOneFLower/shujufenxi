@@ -36,7 +36,7 @@ export default function SettingsPage() {
         }}
       >
         <div className="field">
-          <label>总价过滤（低于该 USD 深度的价差行隐藏）</label>
+          <label>深度过滤（两腿一档名义 USD 取较小值，低于则隐藏；与界面展示的成交单价无关）</label>
           <input
             type="number"
             step={1}

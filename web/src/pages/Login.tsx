@@ -4,20 +4,23 @@ import { api, setToken } from "../api";
 export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("admin123");
+  const [note, setNote] = useState("");
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     try {
-      const r = await api<{ token: string }>("/api/login", {
+      const path = mode === "register" ? "/api/register" : "/api/login";
+      const r = await api<{ token: string }>(path, {
         method: "POST",
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(mode === "register" ? { username, password, note } : { username, password }),
       });
       setToken(r.token);
       onLoggedIn();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "登录失败");
+      setError(err instanceof Error ? err.message : mode === "register" ? "注册失败" : "登录失败");
     }
   }
 
@@ -46,11 +49,19 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
         </section>
 
         <div className="login-card">
-          <h2>进入控制台</h2>
+          <h2>{mode === "register" ? "创建账号" : "进入控制台"}</h2>
           <p className="hint">
-            默认账号 <code>admin</code> / <code>admin123</code>
-            <br />
-            首次启动后端时自动创建
+            {mode === "register" ? (
+              <>
+                若提示“已关闭自助注册”，请用 <code>admin</code> 进入后在管理员页创建用户
+              </>
+            ) : (
+              <>
+                默认账号 <code>admin</code> / <code>admin123</code>
+                <br />
+                首次启动后端时自动创建
+              </>
+            )}
           </p>
           <form onSubmit={submit}>
             <div className="field">
@@ -66,9 +77,26 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
                 autoComplete="current-password"
               />
             </div>
+            {mode === "register" && (
+              <div className="field">
+                <label>备注（可选）</label>
+                <input value={note} onChange={(e) => setNote(e.target.value)} autoComplete="off" />
+              </div>
+            )}
             {error && <p className="error">{error}</p>}
             <button type="submit" className="primary">
-              打开应用
+              {mode === "register" ? "注册并登录" : "登录"}
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              style={{ marginLeft: 10 }}
+              onClick={() => {
+                setError("");
+                setMode((m) => (m === "login" ? "register" : "login"));
+              }}
+            >
+              {mode === "login" ? "去注册" : "去登录"}
             </button>
           </form>
         </div>

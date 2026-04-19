@@ -76,7 +76,7 @@ public class ApiController {
         settingsRepo.findById(u.getId()).orElse(null);
     if (s == null) {
       Map<String, Object> def = new LinkedHashMap<>();
-      def.put("min_total_usd", 100);
+      def.put("min_total_usd", arbProperties.minTotalUsd());
       def.put("spread_sort", "spread_pct_desc");
       def.put("volatility_threshold_pct", 10);
       return def;
@@ -95,7 +95,7 @@ public class ApiController {
     UserSettings s = settingsRepo.findById(u.getId()).orElseGet(UserSettings::new);
     if (s.getUserId() == null) {
       s.setUserId(u.getId());
-      s.setMinTotalUsd(100);
+      s.setMinTotalUsd(arbProperties.minTotalUsd());
       s.setSpreadSort("spread_pct_desc");
       s.setVolatilityThresholdPct(10);
     }

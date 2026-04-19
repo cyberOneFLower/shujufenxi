@@ -5,10 +5,10 @@ spring:
   application:
     name: arb-monitor
   datasource:
-    url: jdbc:h2:file:./data/arb;DB_CLOSE_DELAY=-1;AUTO_SERVER=TRUE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
+    url: jdbc:mysql://127.0.0.1:3306/sjfx?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: yrq700915
   jpa:
     hibernate:
       ddl-auto: update
@@ -16,15 +16,27 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
   jackson:
     serialization:
       write-dates-as-timestamps: false
 
 arb:
+  auth:
+    # true：开放用户自助注册；false：仅管理员后台创建用户（推荐）
+    allow-self-register: true
+  # 价差表深度阈值（USDT）：两腿 min(买档名义,卖档名义) 须 ≥ 此值；设置页 min_total_usd 可覆盖
+  min-total-usd: 10
+  # 行底色分档（min(买入总价,卖出总价)；默认 ≥1500 红 · 1000–1499 土黄 · 100–999 蓝 · &lt;100 白）
+  depth-row-color:
+    red-min: 1500
+    yellow-min: 1000
+    blue-min: 100
   spread-push-ms: 3000
   volatility-push-ms: 3000
   exchanges:
     - bitget
+    - binance
     - gate
     - mexc
     - okx
@@ -42,9 +54,11 @@ arb:
   live:
     # true（推荐）：四所真实行情 WSS/REST；false：仅用内存模拟（离线/调试）
     enabled: true
-    # api：四所 USDT 现货交易对交集（启动时拉取）；config：仅使用下方 symbols
+    # api：从各所拉取 USDT 现货列表；config：仅使用下方 symbols
     symbol-source: api
-    # 仅 symbol-source=api 时生效；0=不截断，使用四所交集全部交易对（负载与连接数随标的增加）
+    # union=各所并集（每所只订本所交易对，小币种最全，负载高）；intersection=仅多所均上架
+    universe-mode: union
+    # 仅 symbol-source=api 时生效；0=不截断（负载与连接数随标的增加）
     max-symbols: 0
     subscribe-chunk-size: 60
     mexc-shard-size: 30
@@ -54,8 +68,11 @@ arb:
     # MEXC：true=官方 WSS + Protobuf 限价深度（推荐）；false=仅 REST 轮询（见 mexc-poll-ms）
     mexc-websocket-enabled: true
     mexc-ws-url: wss://wbs-api.mexc.com/ws
+    binance-ws-url: wss://stream.binance.com:9443/ws
     # Gate 盘口推送间隔：20ms 比 100ms 更贴近实时（负载略高）
     gate-order-book-interval: "20ms"
     # MEXC REST 轮询间隔（仅 mexc-websocket-enabled=false 时生效；建议 250–500）
     mexc-poll-ms: 280
     reconnect-base-ms: 2000
+    # 价差对齐：≤0=不按时戳裁剪，各所最新一条全部一起算；>0 则只保留 ts 在「最新 ts − 此值」内的所
+    align-window-ms: 0

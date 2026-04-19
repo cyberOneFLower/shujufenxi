@@ -32,6 +32,10 @@ services:
       ARB_MQ_PORT: "5672"
       ARB_MQ_USERNAME: guest
       ARB_MQ_PASSWORD: guest
+      # MySQL（若不想用容器内 MySQL，可改成外部地址）
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/arb?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
     networks:
       - arb
     restart: unless-stopped
@@ -50,6 +54,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: arb
+    command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci"]
     volumes:
       - mysql_data:/var/lib/mysql
     networks:

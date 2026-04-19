@@ -23,4 +23,20 @@ public class TokenService {
     if (token == null || token.isBlank()) return null;
     return tokenToUserId.get(token);
   }
+
+  public void revokeToken(String token) {
+    if (token == null || token.isBlank()) return;
+    tokenToUserId.remove(token);
+  }
+
+  public int revokeTokensByUserId(String userId) {
+    if (userId == null || userId.isBlank()) return 0;
+    int removed = 0;
+    for (var e : tokenToUserId.entrySet()) {
+      if (userId.equals(e.getValue())) {
+        if (tokenToUserId.remove(e.getKey(), e.getValue())) removed++;
+      }
+    }
+    return removed;
+  }
 }

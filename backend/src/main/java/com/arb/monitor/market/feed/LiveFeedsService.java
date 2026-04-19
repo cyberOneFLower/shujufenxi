@@ -1,6 +1,7 @@
 package com.arb.monitor.market.feed;
 
 import com.arb.monitor.config.LiveFeedProperties;
+import com.arb.monitor.config.ArbProperties;
 import com.arb.monitor.market.DepthTick;
 import com.arb.monitor.mq.TickGateway;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -57,6 +58,7 @@ public class LiveFeedsService {
   private static final String MEXC_APP_PING = "{\"method\":\"PING\"}";
 
   private final LiveFeedProperties live;
+  private final ArbProperties arb;
   private final SymbolUniverseService symbolUniverse;
   private final TickGateway tickGateway;
   private final ObjectMapper mapper;
@@ -91,20 +93,39 @@ public class LiveFeedsService {
 
   public LiveFeedsService(
       LiveFeedProperties live,
+      ArbProperties arb,
       SymbolUniverseService symbolUniverse,
       TickGateway tickGateway,
       ObjectMapper mapper) {
     this.live = live;
+    this.arb = arb;
     this.symbolUniverse = symbolUniverse;
     this.tickGateway = tickGateway;
     this.mapper = mapper;
   }
 
+  private boolean exchangeEnabled(String ex) {
+    try {
+      return arb.exchanges() != null && arb.exchanges().stream().anyMatch(x -> ex.equalsIgnoreCase(x));
+    } catch (Exception ignored) {
+      return true;
+    }
+  }
+
+  /** 与行情源配置一致的全集（用于日志、MEXC 分片等） */
   private List<String> feedSymbols() {
     if ("config".equalsIgnoreCase(live.getSymbolSource())) {
       return List.copyOf(live.getSymbols());
     }
     return symbolUniverse.getSymbols();
+  }
+
+  /** 各所仅订阅该所实际存在的交易对（union 模式）或全集（intersection / config） */
+  private List<String> feedSymbolsFor(String exchange) {
+    if ("config".equalsIgnoreCase(live.getSymbolSource())) {
+      return List.copyOf(live.getSymbols());
+    }
+    return symbolUniverse.symbolsForExchange(exchange);
   }
 
   private static <T> List<List<T>> partition(List<T> list, int size) {
@@ -121,19 +142,20 @@ public class LiveFeedsService {
 
   @jakarta.annotation.PostConstruct
   public void start() {
-    workers.submit(this::runOkxLoop);
-    workers.submit(this::runGateLoop);
-    workers.submit(this::runBitgetLoop);
+    if (exchangeEnabled("okx")) workers.submit(this::runOkxLoop);
+    if (exchangeEnabled("gate")) workers.submit(this::runGateLoop);
+    if (exchangeEnabled("bitget")) workers.submit(this::runBitgetLoop);
+    if (exchangeEnabled("binance")) workers.submit(this::runBinanceLoop);
     if (live.isMexcWebsocketEnabled()) {
       int shard = Math.max(1, live.getMexcShardSize());
-      for (List<String> part : partition(feedSymbols(), shard)) {
+      for (List<String> part : partition(feedSymbolsFor("mexc"), shard)) {
         final List<String> shardSyms = List.copyOf(part);
         workers.submit(() -> runMexcShardLoop(shardSyms));
       }
       mexcKeepAlive.scheduleAtFixedRate(this::pingMexcApp, 25, 25, TimeUnit.SECONDS);
     }
     log.info(
-        "Live feeds started (OKX/Gate/Bitget WS + MEXC {}). symbolSource={} count={}",
+        "Live feeds started (OKX/Gate/Bitget/Binance WS + MEXC {}). symbolSource={} count={}",
         live.isMexcWebsocketEnabled() ? "WS protobuf" : "REST",
         live.getSymbolSource(),
         feedSymbols().size());
@@ -179,7 +201,7 @@ public class LiveFeedsService {
     while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
       CountDownLatch closed = new CountDownLatch(1);
       try {
-        List<String> payloads = buildOkxSubscribeBatched(feedSymbols());
+        List<String> payloads = buildOkxSubscribeBatched(feedSymbolsFor("okx"));
         http.newWebSocketBuilder()
             .buildAsync(URI.create(live.getOkxWsUrl()), new OkxListener(payloads, closed))
             .get(30, TimeUnit.SECONDS);
@@ -284,7 +306,7 @@ public class LiveFeedsService {
       try {
         http.newWebSocketBuilder()
             .buildAsync(
-                URI.create(live.getGateWsUrl()), new GateListener(feedSymbols(), closed))
+                URI.create(live.getGateWsUrl()), new GateListener(feedSymbolsFor("gate"), closed))
             .get(30, TimeUnit.SECONDS);
         closed.await();
       } catch (Exception e) {
@@ -359,7 +381,7 @@ public class LiveFeedsService {
     while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
       CountDownLatch closed = new CountDownLatch(1);
       try {
-        List<String> payloads = buildBitgetSubscribeBatched(feedSymbols());
+        List<String> payloads = buildBitgetSubscribeBatched(feedSymbolsFor("bitget"));
         http.newWebSocketBuilder()
             .buildAsync(URI.create(live.getBitgetWsUrl()), new BitgetListener(payloads, closed))
             .get(30, TimeUnit.SECONDS);
@@ -368,6 +390,100 @@ public class LiveFeedsService {
         if (!stopped.get()) log.warn("[bitget] feed error: {}", e.toString());
       }
       sleepReconnect();
+    }
+  }
+
+  private void runBinanceLoop() {
+    while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
+      CountDownLatch closed = new CountDownLatch(1);
+      try {
+        List<String> payloads = buildBinanceSubscribeBatched(feedSymbolsFor("binance"));
+        http.newWebSocketBuilder()
+            .buildAsync(URI.create(live.getBinanceWsUrl()), new BinanceListener(payloads, closed))
+            .get(30, TimeUnit.SECONDS);
+        closed.await();
+      } catch (Exception e) {
+        if (!stopped.get()) log.warn("[binance] feed error: {}", e.toString());
+      }
+      sleepReconnect();
+    }
+  }
+
+  private List<String> buildBinanceSubscribeBatched(List<String> symbols) {
+    int chunk = Math.max(1, live.getSubscribeChunkSize());
+    List<String> out = new ArrayList<>();
+    long id = 1;
+    for (int i = 0; i < symbols.size(); i += chunk) {
+      List<String> part = symbols.subList(i, Math.min(symbols.size(), i + chunk));
+      ObjectNode sub = mapper.createObjectNode();
+      sub.put("method", "SUBSCRIBE");
+      ArrayNode params = mapper.createArrayNode();
+      for (String sym : part) {
+        String stream = InstrumentIds.compact(sym).toLowerCase() + "@bookTicker";
+        params.add(stream);
+      }
+      sub.set("params", params);
+      sub.put("id", id++);
+      out.add(sub.toString());
+    }
+    return out;
+  }
+
+  private final class BinanceListener implements WebSocket.Listener {
+    private final List<String> subscribePayloads;
+    private final CountDownLatch closed;
+    private final StringBuilder buf = new StringBuilder();
+
+    BinanceListener(List<String> subscribePayloads, CountDownLatch closed) {
+      this.subscribePayloads = subscribePayloads;
+      this.closed = closed;
+    }
+
+    @Override
+    public void onOpen(WebSocket webSocket) {
+      for (String p : subscribePayloads) {
+        webSocket.sendText(p, true);
+      }
+      webSocket.request(1);
+    }
+
+    @Override
+    public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+      buf.append(data);
+      if (last) {
+        String text = buf.toString();
+        buf.setLength(0);
+        try {
+          JsonNode root = mapper.readTree(text);
+          // subscription ack: {"result":null,"id":1}
+          if (root.has("result") && root.has("id")) {
+            webSocket.request(1);
+            return null;
+          }
+          // combined stream: {"stream":"btcusdt@bookTicker","data":{...}}
+          JsonNode payload = root.has("data") ? root.path("data") : root;
+          if (!"bookTicker".equals(payload.path("e").asText(""))) {
+            webSocket.request(1);
+            return null;
+          }
+          DepthTick t = DepthBookParser.fromBinanceBookTicker("binance", payload);
+          if (t != null) {
+            tickGateway.publish(t);
+          }
+        } catch (Exception e) {
+          log.debug("[binance] parse: {}", e.toString());
+        }
+        webSocket.request(1);
+      } else {
+        webSocket.request(1);
+      }
+      return null;
+    }
+
+    @Override
+    public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
+      closed.countDown();
+      return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
     }
   }
 
@@ -558,7 +674,7 @@ public class LiveFeedsService {
   @Scheduled(fixedDelayString = "${arb.live.mexc-poll-ms:400}")
   public void pollMexcDepth() {
     if (stopped.get() || live.isMexcWebsocketEnabled()) return;
-    for (String sym : feedSymbols()) {
+    for (String sym : feedSymbolsFor("mexc")) {
       try {
         String c = InstrumentIds.compact(sym);
         URI uri = URI.create("https://api.mexc.com/api/v3/depth?symbol=" + c + "&limit=5");

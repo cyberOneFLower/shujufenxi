@@ -14,10 +14,16 @@ public class LiveFeedProperties {
   private boolean enabled = true;
 
   /**
-   * api：从四所公共接口计算 USDT 现货交集（见 {@link com.arb.monitor.market.feed.SymbolUniverseService}）；config：仅使用下方
+   * api：从各所公共接口拉取 USDT 现货列表（见 {@link com.arb.monitor.market.feed.SymbolUniverseService}）；config：仅使用下方
    * {@link #symbols}
    */
   private String symbolSource = "api";
+
+  /**
+   * 仅 symbolSource=api 时生效：{@code intersection} 仅保留 arb.exchanges 里各所均有的交易对；{@code union}
+   * 为各所可交易 USDT 现货的并集（每所只订阅本所实际存在的交易对，小币种更全，负载更高）。
+   */
+  private String universeMode = "union";
 
   /** 仅 symbolSource=api 时生效；0 表示不截断（使用交集全部交易对） */
   private int maxSymbols = 0;
@@ -48,10 +54,17 @@ public class LiveFeedProperties {
   /** WebSocket 断线后重连基础延迟（毫秒） */
   private long reconnectBaseMs = 2000;
 
+  /**
+   * 价差对齐窗口（毫秒）：{@link com.arb.monitor.market.AlignStore} 对每所仅保留最新深度后，只参与 ts ≥
+   * (各所中最新的 ts − 本值) 的所；避免「按整秒取最大簇」漏所。≤0 表示不按时戳裁剪（各所最新一条全部一起算）。
+   */
+  private long alignWindowMs = 0;
+
   /** 各所 WSS 地址（一般无需改） */
   private String okxWsUrl = "wss://ws.okx.com:8443/ws/v5/public";
   private String gateWsUrl = "wss://api.gateio.ws/ws/v4/";
   private String bitgetWsUrl = "wss://ws.bitget.com/v2/ws/public";
+  private String binanceWsUrl = "wss://stream.binance.com:9443/ws";
 
   public boolean isEnabled() {
     return enabled;
@@ -75,6 +88,14 @@ public class LiveFeedProperties {
 
   public void setSymbolSource(String symbolSource) {
     this.symbolSource = symbolSource;
+  }
+
+  public String getUniverseMode() {
+    return universeMode;
+  }
+
+  public void setUniverseMode(String universeMode) {
+    this.universeMode = universeMode;
   }
 
   public int getMaxSymbols() {
@@ -141,6 +162,14 @@ public class LiveFeedProperties {
     this.reconnectBaseMs = reconnectBaseMs;
   }
 
+  public long getAlignWindowMs() {
+    return alignWindowMs;
+  }
+
+  public void setAlignWindowMs(long alignWindowMs) {
+    this.alignWindowMs = alignWindowMs;
+  }
+
   public String getOkxWsUrl() {
     return okxWsUrl;
   }
@@ -163,5 +192,13 @@ public class LiveFeedProperties {
 
   public void setBitgetWsUrl(String bitgetWsUrl) {
     this.bitgetWsUrl = bitgetWsUrl;
+  }
+
+  public String getBinanceWsUrl() {
+    return binanceWsUrl;
+  }
+
+  public void setBinanceWsUrl(String binanceWsUrl) {
+    this.binanceWsUrl = binanceWsUrl;
   }
 }

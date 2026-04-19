@@ -26,6 +26,13 @@ public final class DepthBookParser {
   public static DepthTick fromGateOrderBook(String exchange, JsonNode root) {
     JsonNode res = root.path("result");
     String sym = res.path("s").asText("");
+    if (sym.isEmpty()) {
+      sym = res.path("currency_pair").asText("");
+    }
+    sym = InstrumentIds.toInternalSpotSymbol(sym);
+    if (sym.isEmpty()) {
+      return null;
+    }
     long ts = res.path("t").asLong(0);
     if (ts == 0) ts = System.currentTimeMillis();
     List<List<String>> bids = readSide(res.path("bids"));
@@ -54,6 +61,27 @@ public final class DepthBookParser {
     List<List<String>> bids = readSide(root.path("bids"));
     List<List<String>> asks = readSide(root.path("asks"));
     return build(exchange, internalSymbol, ts, bids, asks);
+  }
+
+  /**
+   * Binance bookTicker.
+   *
+   * <p>Example fields: e=bookTicker, E=eventTime, s=BTCUSDT, b=bestBidPrice, B=bestBidQty,
+   * a=bestAskPrice, A=bestAskQty.
+   */
+  public static DepthTick fromBinanceBookTicker(String exchange, JsonNode root) {
+    String compact = root.path("s").asText("");
+    String sym = InstrumentIds.fromBitgetInstId(compact);
+    long ts = root.path("E").asLong(0);
+    if (ts == 0) ts = System.currentTimeMillis();
+    String bidPx = root.path("b").asText("");
+    String bidQty = root.path("B").asText("");
+    String askPx = root.path("a").asText("");
+    String askQty = root.path("A").asText("");
+    if (bidPx.isEmpty() || askPx.isEmpty() || bidQty.isEmpty() || askQty.isEmpty()) return null;
+    List<List<String>> bids = List.of(List.of(bidPx, bidQty));
+    List<List<String>> asks = List.of(List.of(askPx, askQty));
+    return build(exchange, sym, ts, bids, asks);
   }
 
   private static List<List<String>> readSide(JsonNode arr) {

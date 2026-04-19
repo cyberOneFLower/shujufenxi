@@ -14,7 +14,7 @@ public class UserSettings {
   private String userId;
 
   @Column(name = "min_total_usd", nullable = false)
-  private double minTotalUsd = 100;
+  private double minTotalUsd = 10;
 
   @Column(name = "spread_sort", nullable = false)
   private String spreadSort = "spread_pct_desc";

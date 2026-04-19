@@ -12,15 +12,19 @@ public final class SpreadEngine {
 
   public record FiveAvg(double bidAvg, double askAvg) {}
 
+  /**
+   * 价差行：单价为买入侧卖一 ask1Buy、卖出侧买一 bid1Sell；buyTotalUsdt/sellTotalUsdt 为一档名义（价×量）。
+   * depthMinUsd 仅用于服务端深度过滤。
+   */
   public record SpreadRow(
       String symbol,
       String label,
       String exchangeBuy,
       String exchangeSell,
       double spreadPct,
-      double buyLegTotalUsd,
-      double sellLegTotalUsd,
       double depthMinUsd,
+      double buyTotalUsdt,
+      double sellTotalUsdt,
       double bid1Buy,
       double ask1Buy,
       double bid1Sell,
@@ -67,9 +71,9 @@ public final class SpreadEngine {
                 buy.exchange(),
                 sell.exchange(),
                 spreadPct,
+                depthMin,
                 buyLeg,
                 sellLeg,
-                depthMin,
                 buy.bid1(),
                 buy.ask1(),
                 sell.bid1(),

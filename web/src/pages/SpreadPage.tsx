@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, getToken } from "../api";
 
 type Row = {
@@ -7,18 +7,21 @@ type Row = {
   exchangeBuy: string;
   exchangeSell: string;
   spreadPct: number;
-  buyLegTotalUsd: number;
-  sellLegTotalUsd: number;
-  depthMinUsd: number;
   pair_key: string;
   depthColor: "red" | "yellow" | "blue" | "white";
+  /** 买入侧一档名义 USDT（卖一价×卖一量） */
+  buyTotalUsdt?: number;
+  /** 卖出侧一档名义 USDT（买一价×买一量） */
+  sellTotalUsdt?: number;
+  /** 买入所在所：按卖一价成交的单价 */
   ask1Buy?: number;
   bid1Buy?: number;
+  /** 卖出所在所：按买一价成交的单价 */
   bid1Sell?: number;
   ask1Sell?: number;
 };
 
-const PLATFORMS = ["bitget", "okx", "gate", "mexc"] as const;
+const PLATFORMS = ["bitget", "okx", "gate", "mexc", "binance"] as const;
 
 type ColKey =
   | "fav"
@@ -29,6 +32,8 @@ type ColKey =
   | "spread"
   | "pxBuy"
   | "pxSell"
+  | "totalBuy"
+  | "totalSell"
   | "volBuy"
   | "volSell"
   | "ops";
@@ -40,10 +45,12 @@ const COL_LABELS: Record<ColKey, string> = {
   buyEx: "买入平台",
   sellEx: "卖出平台",
   spread: "价差%",
-  pxBuy: "买入价格",
-  pxSell: "卖出价格",
-  volBuy: "买一档单价 USDT",
-  volSell: "卖一档单价 USDT",
+  pxBuy: "买入单价(卖一)",
+  pxSell: "卖出单价(买一)",
+  totalBuy: "买入总价(USDT)",
+  totalSell: "卖出总价(USDT)",
+  volBuy: "买入单价条",
+  volSell: "卖出单价条",
   ops: "操作",
 };
 
@@ -154,8 +161,10 @@ function loadCols(): Record<ColKey, boolean> {
     spread: true,
     pxBuy: true,
     pxSell: true,
-    volBuy: true,
-    volSell: true,
+    totalBuy: true,
+    totalSell: true,
+    volBuy: false,
+    volSell: false,
     ops: true,
   };
   try {
@@ -172,32 +181,80 @@ function loadCols(): Record<ColKey, boolean> {
 }
 
 function fmtPrice(p: number | undefined): string {
-  if (p == null || !Number.isFinite(p)) return "—";
+  if (p == null || !Number.isFinite(p) || p <= 0) return "—";
   if (p >= 1000) return p.toFixed(2);
   if (p >= 1) return p.toFixed(4);
   return p.toFixed(8);
 }
 
-function ExBadge({ ex }: { ex: string }) {
-  const key = ex.toLowerCase();
-  const colors: Record<string, string> = {
-    bitget: "#00c853",
-    okx: "#303030",
-    gate: "#2962ff",
-    mexc: "#c99400",
-  };
-  const bg = colors[key] || "#6b7280";
-  const letter = ex.slice(0, 1).toUpperCase();
-  return (
-    <span className="ex-badge" style={{ background: bg }} title={ex}>
-      {letter}
-    </span>
-  );
+/** 一档名义 USDT */
+function fmtUsdtNotional(n: number | undefined): string {
+  if (n == null || !Number.isFinite(n) || n < 0) return "—";
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 0 });
+}
+
+type DepthColorBands = {
+  redMin: number;
+  yellowMin: number;
+  blueMin: number;
+};
+
+function fmtBand(n: number): string {
+  if (!Number.isFinite(n)) return "";
+  return Number.isInteger(n) ? String(n) : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+/** 展示用：去掉 `_USDT` 后缀，如 BLUR_USDT → BLUR（内部仍用完整 symbol） */
+function displaySymbol(symbol: string | undefined): string {
+  if (!symbol) return "—";
+  return symbol.replace(/_USDT$/i, "");
+}
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/** 与后端 depthColorBands / 字体色规则一致 */
+function depthColorLegendLine(minUsd: number, bands: DepthColorBands | null): string {
+  const filter = `深度过滤下限 $${minUsd.toFixed(0)}（设置页；与 min(买入总价,卖出总价) 同一指标）`;
+  if (!bands) return `${filter} · 字体色与上述指标一致（加载后显示分档）`;
+  const r = bands.redMin;
+  const y = bands.yellowMin;
+  const bl = bands.blueMin;
+  const yellowHi = r > y ? (Number.isInteger(r) && Number.isInteger(y) ? r - 1 : r - 0.01) : y;
+  const blueHi = y > bl ? (Number.isInteger(y) && Number.isInteger(bl) ? y - 1 : y - 0.01) : y;
+  return `${filter} · 字体色：≥${fmtBand(r)} 红 · ${fmtBand(y)}～${fmtBand(yellowHi)} 土黄 · ${fmtBand(bl)}～${fmtBand(
+    blueHi,
+  )} 蓝 · <${fmtBand(bl)} 正文色`;
 }
 
 export default function SpreadPage() {
   const [rows, setRows] = useState<Row[]>([]);
-  const [minUsd, setMinUsd] = useState(100);
+  const [minUsd, setMinUsd] = useState(10);
+  const [depthColorBands, setDepthColorBands] = useState<DepthColorBands | null>(null);
+  const [copiedPairKey, setCopiedPairKey] = useState<string | null>(null);
+  const copyFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [err, setErr] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [fav, setFav] = useState<Set<string>>(() => loadSet(FAV_KEY));
@@ -228,6 +285,28 @@ export default function SpreadPage() {
     localStorage.setItem(COLS_KEY, JSON.stringify(next));
   }, []);
 
+  const handleCopySymbol = useCallback((pairKey: string, label: string) => {
+    void (async () => {
+      const ok = await copyToClipboard(label);
+      if (!ok) {
+        setErr("复制失败，请检查浏览器权限");
+        return;
+      }
+      if (copyFlashTimerRef.current) clearTimeout(copyFlashTimerRef.current);
+      setCopiedPairKey(pairKey);
+      copyFlashTimerRef.current = setTimeout(() => {
+        setCopiedPairKey(null);
+        copyFlashTimerRef.current = null;
+      }, 1500);
+    })();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (copyFlashTimerRef.current) clearTimeout(copyFlashTimerRef.current);
+    };
+  }, []);
+
   const toggleFav = (pairKey: string) => {
     setFav((prev) => {
       const n = new Set(prev);
@@ -252,9 +331,16 @@ export default function SpreadPage() {
     setRefreshing(true);
     setErr("");
     try {
-      const data = await api<{ rows?: Row[]; minUsd?: number }>("/api/spreads");
+      const data = await api<{
+        rows?: Row[];
+        minUsd?: number;
+        depthColorBands?: DepthColorBands;
+      }>("/api/spreads");
       setRows(Array.isArray(data.rows) ? data.rows : []);
       if (typeof data.minUsd === "number") setMinUsd(data.minUsd);
+      if (data.depthColorBands && typeof data.depthColorBands.redMin === "number") {
+        setDepthColorBands(data.depthColorBands);
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "刷新失败");
     } finally {
@@ -268,10 +354,18 @@ export default function SpreadPage() {
     const es = new EventSource(`/api/stream/spreads?token=${encodeURIComponent(getToken() || "")}`);
     es.onmessage = (ev) => {
       try {
-        const data = JSON.parse(ev.data) as { rows?: Row[]; minUsd?: number; min_usd?: number };
+        const data = JSON.parse(ev.data) as {
+          rows?: Row[];
+          minUsd?: number;
+          min_usd?: number;
+          depthColorBands?: DepthColorBands;
+        };
         setRows(Array.isArray(data.rows) ? data.rows : []);
         const m = data.minUsd ?? data.min_usd;
         setMinUsd(typeof m === "number" && !Number.isNaN(m) ? m : 100);
+        if (data.depthColorBands && typeof data.depthColorBands.redMin === "number") {
+          setDepthColorBands(data.depthColorBands);
+        }
         setErr("");
       } catch {
         /* */
@@ -374,7 +468,7 @@ export default function SpreadPage() {
     return filtered.slice(start, start + pageSize);
   }, [filtered, page, pageSize, totalPages]);
 
-  /** 条形图按「一档单价」相对缩放（原为一档名义 USDT 深度） */
+  /** 条形图按「成交单价」相对本页最大值缩放 */
   const maxAskBuyPx = useMemo(
     () => Math.max(1, ...pageRows.map((r) => Number(r.ask1Buy) || 0)),
     [pageRows],
@@ -576,7 +670,7 @@ export default function SpreadPage() {
       {err && <div className="analysis-error">{err}</div>}
 
       <p style={{ margin: "0.4rem 1rem 0.35rem", fontSize: 12, color: "var(--a-muted)" }}>
-        深度阈值 ${minUsd.toFixed(0)}（设置页可改）· 颜色规则：≥1000 红 · 500–999 黄 · 100–499 蓝 · &lt;100 白
+        {depthColorLegendLine(minUsd, depthColorBands)}
       </p>
 
       <div className="analysis-table-scroller">
@@ -589,8 +683,10 @@ export default function SpreadPage() {
               {cols.buyEx && <th style={{ width: 72 }}>买入平台</th>}
               {cols.sellEx && <th style={{ width: 72 }}>卖出平台</th>}
               {cols.spread && <th style={{ width: 72 }}>价差%</th>}
-              {cols.pxBuy && <th style={{ width: 88 }}>买入价格</th>}
-              {cols.pxSell && <th style={{ width: 88 }}>卖出价格</th>}
+              {cols.pxBuy && <th style={{ width: 88 }}>{COL_LABELS.pxBuy}</th>}
+              {cols.pxSell && <th style={{ width: 88 }}>{COL_LABELS.pxSell}</th>}
+              {cols.totalBuy && <th style={{ width: 100 }}>{COL_LABELS.totalBuy}</th>}
+              {cols.totalSell && <th style={{ width: 100 }}>{COL_LABELS.totalSell}</th>}
               {cols.volBuy && <th>{COL_LABELS.volBuy}</th>}
               {cols.volSell && <th>{COL_LABELS.volSell}</th>}
               {cols.ops && <th style={{ width: 100 }}>操作</th>}
@@ -598,13 +694,16 @@ export default function SpreadPage() {
           </thead>
           <tbody>
             {pageRows.map((r) => {
-              const askBuy = Number(r.ask1Buy) || 0;
-              const bidSell = Number(r.bid1Sell) || 0;
+              const askBuy = Math.max(0, Number(r.ask1Buy) || 0);
+              const bidSell = Math.max(0, Number(r.bid1Sell) || 0);
               const wBuy = Math.min(100, (askBuy / maxAskBuyPx) * 100);
               const wSell = Math.min(100, (bidSell / maxBidSellPx) * 100);
               const warnSell = r.depthColor === "yellow";
               return (
-                <tr key={r.pair_key}>
+                <tr
+                  key={r.pair_key}
+                  className={`analysis-row-depth analysis-row-depth--${r.depthColor}`}
+                >
                   {cols.fav && (
                     <td>
                       <button
@@ -624,14 +723,29 @@ export default function SpreadPage() {
                     </td>
                   )}
                   {cols.pair && (
-                    <td className="analysis-pair-cell">
-                      <span className="analysis-pair-row">
-                        <span className="analysis-pair-symbol">{r.symbol}</span>
-                        <span className="ex-badge-wrap">
-                          <ExBadge ex={r.exchangeBuy} />
-                          <ExBadge ex={r.exchangeSell} />
-                        </span>
-                      </span>
+                    <td
+                      className="analysis-pair-cell analysis-pair-cell--copy"
+                      tabIndex={0}
+                      title={
+                        copiedPairKey === r.pair_key
+                          ? "已复制到剪贴板"
+                          : `${displaySymbol(r.symbol)} · 点击本格复制（完整：${r.symbol}）`
+                      }
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const label = displaySymbol(r.symbol);
+                        if (label && label !== "—") handleCopySymbol(r.pair_key, label);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          const label = displaySymbol(r.symbol);
+                          if (label && label !== "—") handleCopySymbol(r.pair_key, label);
+                        }
+                      }}
+                    >
+                      <span className="analysis-pair-symbol">{displaySymbol(r.symbol)}</span>
                     </td>
                   )}
                   {cols.buyEx && <td>{r.exchangeBuy}</td>}
@@ -643,6 +757,16 @@ export default function SpreadPage() {
                   )}
                   {cols.pxBuy && <td className="analysis-num">{fmtPrice(r.ask1Buy)}</td>}
                   {cols.pxSell && <td className="analysis-num">{fmtPrice(r.bid1Sell)}</td>}
+                  {cols.totalBuy && (
+                    <td className="analysis-num" title="买入侧卖一价×卖一量">
+                      {fmtUsdtNotional(r.buyTotalUsdt)}
+                    </td>
+                  )}
+                  {cols.totalSell && (
+                    <td className="analysis-num" title="卖出侧买一价×买一量">
+                      {fmtUsdtNotional(r.sellTotalUsdt)}
+                    </td>
+                  )}
                   {cols.volBuy && (
                     <td className="analysis-bar-cell">
                       <div className="analysis-bar-track">

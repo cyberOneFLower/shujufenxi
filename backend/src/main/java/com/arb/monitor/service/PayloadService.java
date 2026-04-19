@@ -2,13 +2,14 @@ package com.arb.monitor.service;
 
 import com.arb.monitor.domain.User;
 import com.arb.monitor.market.AlignStore;
-import com.arb.monitor.market.DepthColorUtil;
+import com.arb.monitor.market.DepthRowColorService;
 import com.arb.monitor.market.MarketDataService;
 import com.arb.monitor.market.SpreadEngine;
 import com.arb.monitor.market.SpreadEngine.FiveAvg;
 import com.arb.monitor.market.SpreadEngine.SpreadRow;
 import com.arb.monitor.market.VolatilityEngine;
 import com.arb.monitor.market.VolatilityEngine.ExchangeSymbol;
+import com.arb.monitor.config.ArbProperties;
 import com.arb.monitor.repo.SpreadBlacklistRepository;
 import com.arb.monitor.repo.UserRepository;
 import com.arb.monitor.repo.UserSettingsRepository;
@@ -34,6 +35,8 @@ public class PayloadService {
   private final SpreadBlacklistRepository spreadBlacklistRepository;
   private final VolatilityBlacklistRepository volatilityBlacklistRepository;
   private final MarketDataService marketData;
+  private final ArbProperties arbProperties;
+  private final DepthRowColorService depthRowColorService;
   private final ObjectMapper mapper = new ObjectMapper();
 
   public PayloadService(
@@ -41,12 +44,16 @@ public class PayloadService {
       UserSettingsRepository settingsRepository,
       SpreadBlacklistRepository spreadBlacklistRepository,
       VolatilityBlacklistRepository volatilityBlacklistRepository,
-      MarketDataService marketData) {
+      MarketDataService marketData,
+      ArbProperties arbProperties,
+      DepthRowColorService depthRowColorService) {
     this.userRepository = userRepository;
     this.settingsRepository = settingsRepository;
     this.spreadBlacklistRepository = spreadBlacklistRepository;
     this.volatilityBlacklistRepository = volatilityBlacklistRepository;
     this.marketData = marketData;
+    this.arbProperties = arbProperties;
+    this.depthRowColorService = depthRowColorService;
   }
 
   private static String pairKey(String symbol, String buy, String sell) {
@@ -56,7 +63,7 @@ public class PayloadService {
   public Map<String, Object> buildSpreadPayload(String userId) {
     UserSettings s =
         settingsRepository.findById(userId).orElse(null);
-    double minUsd = s != null ? s.getMinTotalUsd() : 100;
+    double minUsd = s != null ? s.getMinTotalUsd() : arbProperties.minTotalUsd();
     String sort = s != null ? s.getSpreadSort() : "spread_pct_desc";
 
     Set<String> blocked = new HashSet<>();
@@ -89,15 +96,14 @@ public class PayloadService {
         row.put("exchangeBuy", r.exchangeBuy());
         row.put("exchangeSell", r.exchangeSell());
         row.put("spreadPct", r.spreadPct());
-        row.put("buyLegTotalUsd", r.buyLegTotalUsd());
-        row.put("sellLegTotalUsd", r.sellLegTotalUsd());
-        row.put("depthMinUsd", r.depthMinUsd());
+        row.put("buyTotalUsdt", r.buyTotalUsdt());
+        row.put("sellTotalUsdt", r.sellTotalUsdt());
         row.put("bid1Buy", r.bid1Buy());
         row.put("ask1Buy", r.ask1Buy());
         row.put("bid1Sell", r.bid1Sell());
         row.put("ask1Sell", r.ask1Sell());
         row.put("pair_key", pk);
-        row.put("depthColor", DepthColorUtil.depthColorUsd(r.depthMinUsd()));
+        row.put("depthColor", depthRowColorService.colorFor(r.depthMinUsd()));
         row.put("five", fiveOut);
         rows.add(row);
       }
@@ -112,6 +118,7 @@ public class PayloadService {
     out.put("ts", System.currentTimeMillis());
     out.put("rows", rows);
     out.put("minUsd", minUsd);
+    out.put("depthColorBands", depthRowColorService.bandsForApi());
     return out;
   }
 

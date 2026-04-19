@@ -1,6 +1,8 @@
 package com.arb.monitor;
 
 import com.arb.monitor.config.ArbProperties;
+import com.arb.monitor.config.AuthProperties;
+import com.arb.monitor.config.DepthRowColorProperties;
 import com.arb.monitor.config.LiveFeedProperties;
 import com.arb.monitor.config.MqProperties;
 import org.springframework.boot.SpringApplication;
@@ -11,7 +13,13 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(exclude = RabbitAutoConfiguration.class)
 @EnableScheduling
-@EnableConfigurationProperties({ArbProperties.class, LiveFeedProperties.class, MqProperties.class})
+@EnableConfigurationProperties({
+  ArbProperties.class,
+  LiveFeedProperties.class,
+  MqProperties.class,
+  AuthProperties.class,
+  DepthRowColorProperties.class
+})
 public class ArbMonitorApplication {
 
   public static void main(String[] args) {

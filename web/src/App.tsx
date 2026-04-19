@@ -1,18 +1,48 @@
-import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { api, getToken } from "./api";
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api, getToken, setToken } from "./api";
 import Login from "./pages/Login";
 import SpreadPage from "./pages/SpreadPage";
 import VolatilityPage from "./pages/VolatilityPage";
 import BlacklistPage from "./pages/BlacklistPage";
 import SettingsPage from "./pages/SettingsPage";
 import LatencyPage from "./pages/LatencyPage";
+import AdminUsersPage from "./pages/AdminUsersPage";
+import ProfilePage from "./pages/ProfilePage";
 
-type Me = { id: string; username: string; note: string; volatility_enabled: boolean };
+export type Me = { id: string; username: string; note: string; volatility_enabled: boolean; role?: string };
 
 function LoggedInShell({ me }: { me: Me }) {
   const { pathname } = useLocation();
+  const nav = useNavigate();
   const fullWidthMain = pathname === "/";
+  const isAdmin = useMemo(() => String(me.role || "").toUpperCase() === "ADMIN", [me.role]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function onDocMouseDown(e: MouseEvent) {
+      if (!menuRef.current) return;
+      const target = e.target as Node | null;
+      if (target && menuRef.current.contains(target)) return;
+      setMenuOpen(false);
+    }
+    if (!menuOpen) return;
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [menuOpen]);
+
+  async function logout() {
+    try {
+      await api("/api/logout", { method: "POST" });
+    } catch {
+      // ignore: token 可能已过期/后端重启
+    } finally {
+      setToken(null);
+      window.location.reload();
+    }
+  }
+
   return (
     <div className="layout">
       <header className="nt-header">
@@ -33,8 +63,61 @@ function LoggedInShell({ me }: { me: Me }) {
           <NavLink to="/latency" className={({ isActive }) => (isActive ? "active" : "")}>
             API 延时
           </NavLink>
+          {isAdmin && (
+            <NavLink to="/admin/users" className={({ isActive }) => (isActive ? "active" : "")}>
+              管理员
+            </NavLink>
+          )}
         </nav>
-        <span className="badge">{me.username}</span>
+        <div className="nt-header-right">
+          <div className="user-menu" ref={menuRef}>
+            <button
+              type="button"
+              className="badge badge--link user-menu-trigger"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+              title="打开用户菜单"
+            >
+              {isAdmin ? "ADMIN" : me.username}
+              <span className="user-menu-caret" aria-hidden>
+                ▾
+              </span>
+            </button>
+            {menuOpen && (
+              <div className="user-menu-pop" role="menu" aria-label="用户菜单">
+                <button
+                  type="button"
+                  className="user-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    nav("/profile");
+                  }}
+                >
+                  个人资料
+                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    className="user-menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      nav("/admin/users");
+                    }}
+                  >
+                    用户管理
+                  </button>
+                )}
+                <div className="user-menu-sep" role="separator" />
+                <button type="button" className="user-menu-item user-menu-item--danger" role="menuitem" onClick={logout}>
+                  登出
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </header>
       <main className={fullWidthMain ? "main--full" : undefined}>
         <Routes>
@@ -43,6 +126,8 @@ function LoggedInShell({ me }: { me: Me }) {
           <Route path="/blacklist" element={<BlacklistPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/latency" element={<LatencyPage />} />
+          <Route path="/profile" element={<ProfilePage me={me} />} />
+          <Route path="/admin/users" element={isAdmin ? <AdminUsersPage /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

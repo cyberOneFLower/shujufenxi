@@ -20,6 +20,13 @@ public class User {
 
   private String note = "";
 
+  /** USER / ADMIN */
+  @Column
+  private String role;
+
+  @Column
+  private Boolean enabled;
+
   @Column(name = "volatility_enabled", nullable = false)
   private boolean volatilityEnabled = true;
 
@@ -64,6 +71,22 @@ public class User {
 
   public void setVolatilityEnabled(boolean volatilityEnabled) {
     this.volatilityEnabled = volatilityEnabled;
+  }
+
+  public String getRole() {
+    return role == null || role.isBlank() ? "USER" : role;
+  }
+
+  public void setRole(String role) {
+    this.role = role;
+  }
+
+  public boolean isEnabled() {
+    return enabled == null ? true : enabled.booleanValue();
+  }
+
+  public void setEnabled(boolean enabled) {
+    this.enabled = enabled;
   }
 
   public Instant getCreatedAt() {
