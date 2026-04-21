@@ -9,6 +9,7 @@ import SettingsPage from "./pages/SettingsPage";
 import LatencyPage from "./pages/LatencyPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import ProfilePage from "./pages/ProfilePage";
+import SpreadRawPage from "./pages/SpreadRawPage";
 
 export type Me = { id: string; username: string; note: string; volatility_enabled: boolean; role?: string };
 
@@ -50,6 +51,9 @@ function LoggedInShell({ me }: { me: Me }) {
         <nav>
           <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
             数据分析
+          </NavLink>
+          <NavLink to="/spreads/raw" className={({ isActive }) => (isActive ? "active" : "")}>
+            原始Spreads
           </NavLink>
           <NavLink to="/vol" className={({ isActive }) => (isActive ? "active" : "")}>
             暴涨暴跌
@@ -122,6 +126,7 @@ function LoggedInShell({ me }: { me: Me }) {
       <main className={fullWidthMain ? "main--full" : undefined}>
         <Routes>
           <Route path="/" element={<SpreadPage />} />
+          <Route path="/spreads/raw" element={<SpreadRawPage />} />
           <Route path="/vol" element={<VolatilityPage volEnabled={me.volatility_enabled} />} />
           <Route path="/blacklist" element={<BlacklistPage />} />
           <Route path="/settings" element={<SettingsPage />} />

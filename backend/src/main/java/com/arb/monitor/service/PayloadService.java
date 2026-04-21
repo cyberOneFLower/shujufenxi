@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -77,6 +78,8 @@ public class PayloadService {
     for (String sym : align.allSymbols()) {
       var ticks = align.aligned(sym);
       if (ticks == null) continue;
+      List<String> present =
+          new ArrayList<>(new TreeSet<>(ticks.stream().map(t -> t.exchange().toLowerCase()).toList()));
       List<SpreadRow> spreadRows = SpreadEngine.computeSpreadRows(sym, ticks);
       Map<String, FiveAvg> five = SpreadEngine.fiveLevelSummary(ticks);
       Map<String, Map<String, Double>> fiveOut = new LinkedHashMap<>();
@@ -96,6 +99,7 @@ public class PayloadService {
         row.put("exchangeBuy", r.exchangeBuy());
         row.put("exchangeSell", r.exchangeSell());
         row.put("spreadPct", r.spreadPct());
+        row.put("presentExchanges", present);
         row.put("buyTotalUsdt", r.buyTotalUsdt());
         row.put("sellTotalUsdt", r.sellTotalUsdt());
         row.put("bid1Buy", r.bid1Buy());

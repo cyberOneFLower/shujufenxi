@@ -9,6 +9,8 @@ type Row = {
   spreadPct: number;
   pair_key: string;
   depthColor: "red" | "yellow" | "blue" | "white";
+  /** 当前参与对齐计算的交易所（后端 AlignStore 对该 symbol 取到的 exchanges） */
+  presentExchanges?: string[];
   /** 买入侧一档名义 USDT（卖一价×卖一量） */
   buyTotalUsdt?: number;
   /** 卖出侧一档名义 USDT（买一价×买一量） */
@@ -729,7 +731,11 @@ export default function SpreadPage() {
                       title={
                         copiedPairKey === r.pair_key
                           ? "已复制到剪贴板"
-                          : `${displaySymbol(r.symbol)} · 点击本格复制（完整：${r.symbol}）`
+                          : `${displaySymbol(r.symbol)} · 点击本格复制（完整：${r.symbol}）${
+                              Array.isArray(r.presentExchanges) && r.presentExchanges.length
+                                ? ` · 当前到齐：${r.presentExchanges.join(", ")}`
+                                : ""
+                            }`
                       }
                       onClick={(e) => {
                         e.preventDefault();
