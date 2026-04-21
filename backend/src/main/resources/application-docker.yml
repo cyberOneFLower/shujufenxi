@@ -1,9 +1,0 @@
-# Docker / Compose：与同网络中的 mysql 服务通信。
-# wait-rabbit-and-run.sh 会默认激活本 profile（spring.profiles.active=docker），
-# 避免未注入 SPRING_DATASOURCE_* 时仍使用 application.yml 里的 127.0.0.1。
-spring:
-  datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/arb?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
-    username: ${SPRING_DATASOURCE_USERNAME:root}
-    # 默认与官方 MySQL 镜像常见首次初始化一致；勿与 application.yml 本地密码混用。覆盖：SPRING_DATASOURCE_PASSWORD 或 MYSQL_ROOT_PASSWORD（compose 会映射）
-    password: ${SPRING_DATASOURCE_PASSWORD:root}
