@@ -12,6 +12,9 @@ services:
   app:
     image: ${ARB_IMAGE}
     container_name: arb-app
+    depends_on:
+      mysql:
+        condition: service_healthy
     ports:
       - "8787:8787"
       - "5672:5672"
@@ -26,9 +29,10 @@ services:
       ARB_MQ_PORT: "5672"
       ARB_MQ_USERNAME: guest
       ARB_MQ_PASSWORD: guest
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://mysql:3306/sjfx?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
-      SPRING_DATASOURCE_USERNAME: arb
-      SPRING_DATASOURCE_PASSWORD: root
+      # 须与下方 mysql 的库名、root 密码一致；默认库名 arb（与 MYSQL_DATABASE 一致），勿再用不存在的 sjfx / arb 账号
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://mysql:3306/arb?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
     networks:
       - arb
     restart: unless-stopped
@@ -52,6 +56,16 @@ services:
       - mysql_data:/var/lib/mysql
     networks:
       - arb
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" || exit 1",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
 
 networks:
   arb:
