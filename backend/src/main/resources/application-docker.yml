@@ -5,4 +5,5 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/arb?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
     username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:yrq700915}
+    # 默认与官方 MySQL 镜像常见首次初始化一致；勿与 application.yml 本地密码混用。覆盖：SPRING_DATASOURCE_PASSWORD 或 MYSQL_ROOT_PASSWORD（compose 会映射）
+    password: ${SPRING_DATASOURCE_PASSWORD:root}
