@@ -30,7 +30,7 @@ services:
       ARB_MQ_USERNAME: guest
       ARB_MQ_PASSWORD: guest
       # 须与下方 mysql 的库名、root 密码一致；默认库名 arb（与 MYSQL_DATABASE 一致），勿再用不存在的 sjfx / arb 账号
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://mysql:3306/arb?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://mysql:3306/sjfx?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
     networks:
