@@ -1,0 +1,7 @@
+# Docker / Compose：连同网络中的 mysql 服务（勿用 127.0.0.1）。
+# wait-rabbit-and-run.sh 默认 spring.profiles.active=docker，本文件才会生效。
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/arb?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:root}

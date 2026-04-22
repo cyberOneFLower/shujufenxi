@@ -29,7 +29,7 @@ services:
       ARB_MQ_PORT: "5672"
       ARB_MQ_USERNAME: guest
       ARB_MQ_PASSWORD: guest
-      # 须与下方 mysql 一致。MYSQL_ROOT_PASSWORD 仅在「空数据卷首次初始化」时写入库内；旧卷里密码不变，此处须与真实 root 一致。
+      # 须与下方 mysql 一致（库名与 MYSQL_DATABASE 一致为 arb）。MYSQL_ROOT_PASSWORD 仅空卷首次初始化写入；旧卷须与库内 root 密码一致。
       SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:mysql://mysql:3306/arb?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
@@ -54,6 +54,8 @@ services:
     command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci"]
     volumes:
       - mysql_data:/var/lib/mysql
+      # 仅「空卷」首次启动时执行 .sql；已有 mysql_data 的旧环境请用上面 SQL 注释里的 docker exec 手动建库 arb
+      - ./mysql-init:/docker-entrypoint-initdb.d:ro
     networks:
       - arb
     healthcheck:
